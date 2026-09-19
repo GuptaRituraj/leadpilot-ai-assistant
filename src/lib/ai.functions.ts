@@ -30,6 +30,8 @@ function describe(lead: Record<string, unknown>, activities: Array<Record<string
     `Priority: ${lead["priority"]}`,
     `Follow-up date: ${lead["follow_up_date"] ?? "none"}`,
     `Notes: ${lead["notes"] ?? "-"}`,
+    `Registered at: ${lead["created_at"] ?? "unavailable"}`,
+    `Last updated at: ${lead["updated_at"] ?? "unavailable"}`,
     `Today: ${new Date().toISOString().slice(0, 10)}`,
     "Recent activities:",
     activities.length
@@ -52,7 +54,7 @@ export const generateLeadSummary = createServerFn({ method: "POST" })
       risk_or_opportunity: string;
       suggested_next_step: string;
     }>(
-      "You are a concise sales CRM assistant for a solo founder. Be practical and specific. Each field is 1-2 short sentences.",
+      "You are a concise sales CRM assistant for a solo founder. Ground every statement only in the supplied lead fields and activity history. Never invent facts, intent, budget, timing, objections, or contact history. When information is missing, say it is not available. Summarize what the lead is about and their main requirement in lead_summary; include the explicit status and priority in current_status_summary; identify a grounded risk or opportunity; and recommend one practical next step. Each field must be 1-2 short sentences.",
       describe(lead, activities),
       "lead_summary",
       objectSchema({
@@ -63,11 +65,28 @@ export const generateLeadSummary = createServerFn({ method: "POST" })
       }),
     );
 
-    const { data: saved, error } = await supabaseAdmin
+    const { data: existing, error: existingError } = await supabaseAdmin
       .from("ai_summaries")
-      .insert({ lead_id: data.leadId, ...result })
-      .select()
-      .single();
+      .select("id")
+      .eq("lead_id", data.leadId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (existingError) throw new Error(existingError.message);
+
+    const summaryValues = {
+      lead_id: data.leadId,
+      lead_summary: result.lead_summary,
+      current_status_summary: result.current_status_summary,
+      risk_or_opportunity: result.risk_or_opportunity,
+      suggested_next_step: result.suggested_next_step,
+      updated_at: new Date().toISOString(),
+    };
+
+    const saveQuery = existing
+      ? supabaseAdmin.from("ai_summaries").update(summaryValues).eq("id", existing.id)
+      : supabaseAdmin.from("ai_summaries").insert(summaryValues);
+    const { data: saved, error } = await saveQuery.select().single();
     if (error) throw new Error(error.message);
     return saved;
   });

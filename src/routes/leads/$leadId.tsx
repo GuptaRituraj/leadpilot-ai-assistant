@@ -2,7 +2,18 @@ import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
-import { ArrowLeft, Sparkles, Trash2, Plus } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowLeft,
+  CalendarDays,
+  Clipboard,
+  Plus,
+  RefreshCw,
+  ShieldAlert,
+  Sparkles,
+  Target,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
 import {
   ACTIVITY_TYPES,
@@ -32,6 +43,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export const Route = createFileRoute("/leads/$leadId")({
   head: () => ({
@@ -46,6 +59,8 @@ export const Route = createFileRoute("/leads/$leadId")({
         property: "og:description",
         content: "Lead context, activity timeline, AI summary, tasks and follow-up messages.",
       },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: LeadDetail,
@@ -128,8 +143,10 @@ function LeadDetail() {
 
   const summaryMutation = useMutation({
     mutationFn: () => runSummary({ data: { leadId } }),
-    onSuccess: () => invalidate("summaries"),
-    onError: (e: Error) => toast.error(e.message),
+    onSuccess: async () => {
+      await invalidate("summaries");
+      toast.success(summary ? "AI summary regenerated" : "AI summary generated");
+    },
   });
 
   const taskMutation = useMutation({
@@ -312,43 +329,168 @@ function LeadDetail() {
         </Card>
 
         <div className="space-y-4">
-          <Card>
-            <CardHeader className="flex-row items-center justify-between pb-3">
-              <CardTitle className="text-base">AI summary</CardTitle>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={summaryMutation.isPending}
-                onClick={() => summaryMutation.mutate()}
-              >
-                <Sparkles className="size-4" />
-                {summaryMutation.isPending ? "Generating…" : "Generate"}
-              </Button>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              {summary ? (
-                <>
-                  <div>
-                    <p className="text-xs font-medium text-muted-foreground">Summary</p>
-                    <p>{summary.lead_summary}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium text-muted-foreground">Current status</p>
-                    <p>{summary.current_status_summary}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium text-muted-foreground">Risk / opportunity</p>
-                    <p>{summary.risk_or_opportunity}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium text-muted-foreground">Suggested next step</p>
-                    <p>{summary.suggested_next_step}</p>
-                  </div>
-                </>
-              ) : (
-                <p className="text-muted-foreground">
-                  No summary yet. Generate one from this lead's details and activity.
+          <Card className="overflow-hidden border-primary/20">
+            <CardHeader className="gap-3 border-b border-border/70 bg-primary/5 pb-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="space-y-1">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <span className="grid size-8 place-items-center rounded-md bg-primary/15 text-primary">
+                    <Sparkles className="size-4" />
+                  </span>
+                  AI Lead Summary
+                </CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  Grounded in this lead's details and recent activity.
                 </p>
+              </div>
+              {summary && !summariesQuery.isError && (
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={async () => {
+                      const text = [
+                        `Lead Context\n${summary.lead_summary}`,
+                        `Registered\n${new Date(lead.created_at).toLocaleDateString()}`,
+                        `Main Interest\n${lead.interest ?? "Information unavailable"}`,
+                        `Current Status\n${summary.current_status_summary}`,
+                        `Risk or Opportunity\n${summary.risk_or_opportunity}`,
+                        `Suggested Next Step\n${summary.suggested_next_step}`,
+                      ].join("\n\n");
+                      try {
+                        await navigator.clipboard.writeText(text);
+                        toast.success("Summary copied");
+                      } catch {
+                        toast.error("Could not copy the summary");
+                      }
+                    }}
+                  >
+                    <Clipboard /> Copy Summary
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={summaryMutation.isPending}
+                    onClick={() => summaryMutation.mutate()}
+                  >
+                    <RefreshCw className={summaryMutation.isPending ? "animate-spin" : ""} />
+                    {summaryMutation.isPending ? "Regenerating…" : "Regenerate Summary"}
+                  </Button>
+                </div>
+              )}
+            </CardHeader>
+            <CardContent className="p-4 sm:p-5">
+              {summariesQuery.isLoading ? (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {[0, 1, 2, 3].map((item) => (
+                    <div key={item} className="space-y-3 rounded-lg border border-border/70 p-4">
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-3 w-full" />
+                      <Skeleton className="h-3 w-4/5" />
+                    </div>
+                  ))}
+                </div>
+              ) : summariesQuery.isError ? (
+                <Alert variant="destructive">
+                  <AlertCircle className="size-4" />
+                  <AlertTitle>We couldn’t load this summary</AlertTitle>
+                  <AlertDescription className="mt-2 flex flex-wrap items-center gap-3">
+                    <span>Your saved summary is still safe. Try loading it again.</span>
+                    <Button size="sm" variant="outline" onClick={() => summariesQuery.refetch()}>
+                      <RefreshCw /> Retry
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              ) : summaryMutation.isPending ? (
+                <div className="flex min-h-48 flex-col items-center justify-center gap-3 text-center">
+                  <span className="grid size-11 place-items-center rounded-lg bg-primary/15 text-primary">
+                    <Sparkles className="size-5 animate-pulse" />
+                  </span>
+                  <div>
+                    <p className="text-sm font-medium">Reviewing the lead context…</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      This may take a moment. Your existing summary stays available until the new one is saved.
+                    </p>
+                  </div>
+                </div>
+              ) : summaryMutation.isError ? (
+                <Alert variant="destructive">
+                  <AlertCircle className="size-4" />
+                  <AlertTitle>Summary generation didn’t finish</AlertTitle>
+                  <AlertDescription className="mt-2 space-y-3">
+                    <p>{summaryMutation.error.message}</p>
+                    <Button size="sm" variant="outline" onClick={() => summaryMutation.mutate()}>
+                      <RefreshCw /> Try Again
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              ) : summary ? (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-lg border border-border/70 bg-muted/25 p-4">
+                    <div className="mb-3 flex items-center gap-2 text-sm font-medium">
+                      <Target className="size-4 text-primary" /> Lead Context
+                    </div>
+                    <p className="text-sm leading-6">{summary.lead_summary}</p>
+                    <dl className="mt-4 grid gap-3 border-t border-border/60 pt-3 text-xs">
+                      <div>
+                        <dt className="text-muted-foreground">Registration date</dt>
+                        <dd className="mt-0.5 font-medium">
+                          {new Date(lead.created_at).toLocaleDateString(undefined, {
+                            year: "numeric",
+                            month: "short",
+                            day: "numeric",
+                          })}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-muted-foreground">Main interest</dt>
+                        <dd className="mt-0.5 font-medium">
+                          {lead.interest ?? "Information unavailable"}
+                        </dd>
+                      </div>
+                    </dl>
+                  </div>
+                  <div className="rounded-lg border border-border/70 bg-muted/25 p-4">
+                    <div className="mb-3 flex items-center gap-2 text-sm font-medium">
+                      <CalendarDays className="size-4 text-primary" /> Current Status
+                    </div>
+                    <div className="mb-3 flex flex-wrap gap-2">
+                      <StatusBadge status={lead.status} />
+                      <PriorityBadge priority={lead.priority} />
+                    </div>
+                    <p className="text-sm leading-6 text-muted-foreground">
+                      {summary.current_status_summary}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-border/70 bg-muted/25 p-4">
+                    <div className="mb-3 flex items-center gap-2 text-sm font-medium">
+                      <ShieldAlert className="size-4 text-primary" /> Risk or Opportunity
+                    </div>
+                    <p className="text-sm leading-6 text-muted-foreground">
+                      {summary.risk_or_opportunity}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
+                    <div className="mb-3 flex items-center gap-2 text-sm font-medium">
+                      <Sparkles className="size-4 text-primary" /> Suggested Next Step
+                    </div>
+                    <p className="text-sm leading-6">{summary.suggested_next_step}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex min-h-48 flex-col items-center justify-center gap-4 rounded-lg border border-dashed border-border bg-muted/20 p-6 text-center">
+                  <span className="grid size-11 place-items-center rounded-lg bg-primary/15 text-primary">
+                    <Sparkles className="size-5" />
+                  </span>
+                  <div className="max-w-sm">
+                    <p className="text-sm font-medium">Turn this lead into a clear next step</p>
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                      Generate a grounded overview using the saved lead details and activity history.
+                    </p>
+                  </div>
+                  <Button onClick={() => summaryMutation.mutate()}>
+                    <Sparkles /> Generate AI Summary
+                  </Button>
+                </div>
               )}
             </CardContent>
           </Card>
