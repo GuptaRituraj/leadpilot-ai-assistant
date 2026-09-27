@@ -1,39 +1,24 @@
 import { cn } from "@/lib/utils";
 
 const statusStyles: Record<string, string> = {
-  New: "bg-chart-3/15 text-chart-3",
-  Contacted: "bg-chart-2/20 text-chart-2",
-  Qualified: "bg-primary/15 text-primary",
-  "Proposal Sent": "bg-chart-5/15 text-chart-5",
-  Won: "bg-chart-5/20 text-chart-5",
-  Lost: "bg-destructive/12 text-destructive",
+  New: "border-status-new/30 bg-status-new/10 text-status-new",
+  Contacted: "border-status-contacted/30 bg-status-contacted/10 text-status-contacted",
+  Qualified: "border-status-qualified/30 bg-status-qualified/10 text-status-qualified",
+  "Proposal Sent": "border-status-proposal/30 bg-status-proposal/10 text-status-proposal",
+  Won: "border-status-won/30 bg-status-won/10 text-status-won",
+  Lost: "border-status-lost/30 bg-status-lost/10 text-status-lost",
 };
-
 const priorityStyles: Record<string, string> = {
-  Low: "bg-muted text-muted-foreground",
-  Medium: "bg-chart-2/20 text-chart-2",
-  High: "bg-destructive/12 text-destructive",
+  Low: "border-border bg-muted/50 text-muted-foreground",
+  Medium: "border-status-contacted/30 bg-status-contacted/10 text-status-contacted",
+  High: "border-destructive/30 bg-destructive/10 text-destructive",
 };
-
 function Pill({ label, className }: { label: string; className?: string }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
-        className,
-      )}
-    >
-      {label}
-    </span>
-  );
+  return <span className={cn("inline-flex shrink-0 items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold", className)}>{label}</span>;
 }
-
 export function StatusBadge({ status }: { status: string }) {
-  return <Pill label={status} className={statusStyles[status] ?? "bg-muted text-muted-foreground"} />;
+  return <Pill label={status} className={statusStyles[status] ?? "border-border bg-muted text-muted-foreground"} />;
 }
-
 export function PriorityBadge({ priority }: { priority: string }) {
-  return (
-    <Pill label={priority} className={priorityStyles[priority] ?? "bg-muted text-muted-foreground"} />
-  );
+  return <Pill label={priority} className={priorityStyles[priority] ?? "border-border bg-muted text-muted-foreground"} />;
 }

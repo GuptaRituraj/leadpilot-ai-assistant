@@ -6,6 +6,11 @@ import {
   AlertCircle,
   ArrowLeft,
   CalendarDays,
+  Clock3,
+  FileText,
+  ListTodo,
+  Mail,
+  Pencil,
   Clipboard,
   Plus,
   RefreshCw,
@@ -67,7 +72,7 @@ export const Route = createFileRoute("/leads/$leadId")({
 });
 
 const selectClass =
-  "h-9 rounded-md border border-input bg-card px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
+  "h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 function LeadDetail() {
   const { leadId } = Route.useParams();
@@ -176,45 +181,41 @@ function LeadDetail() {
     onSuccess: () => invalidate("tasks"),
   });
 
-  if (leadQuery.isLoading) return <p className="text-sm text-muted-foreground">Loading lead…</p>;
+  if (leadQuery.isLoading) return <div className="space-y-5"><Skeleton className="h-36 w-full" /><div className="grid gap-4 lg:grid-cols-2"><Skeleton className="h-80" /><Skeleton className="h-80" /></div></div>;
   if (leadQuery.isError || !leadQuery.data)
-    return <p className="text-sm text-muted-foreground">This lead could not be found.</p>;
+    return <div className="flex flex-col items-center gap-3 rounded-md border border-dashed border-border py-16 text-center"><AlertCircle className="size-8 text-destructive" /><h1 className="text-lg font-semibold">This lead could not be loaded</h1><p className="text-sm text-muted-foreground">Try again or return to the pipeline.</p><div className="flex gap-2"><Button variant="outline" onClick={() => leadQuery.refetch()}>Try again</Button><Button asChild><Link to="/leads">Pipeline</Link></Button></div></div>;
 
   const lead = leadQuery.data;
   const summary = summariesQuery.data?.[0];
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-7">
       <Link
         to="/leads"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-primary"
       >
         <ArrowLeft className="size-4" /> All leads
       </Link>
 
-      <Card>
-        <CardContent className="space-y-4 p-5">
+      <Card className="shadow-none">
+        <CardContent className="space-y-5 p-5 sm:p-7">
           <div className="flex flex-wrap items-start gap-3">
             <div className="min-w-0 flex-1">
-              <h1 className="text-2xl font-semibold tracking-tight">{lead.name}</h1>
-              <p className="text-sm text-muted-foreground">
-                {lead.company ?? "No company"} · {lead.lead_source ?? "Unknown source"}
-              </p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {[lead.phone, lead.email].filter(Boolean).join(" · ") || "No contact details"}
-              </p>
-              {lead.interest && <p className="mt-2 text-sm">Interested in: {lead.interest}</p>}
-              {lead.notes && <p className="mt-1 text-sm text-muted-foreground">{lead.notes}</p>}
+              <p className="mb-2 text-xs font-semibold uppercase text-primary">Lead profile</p>
+              <h1 className="text-3xl font-semibold">{lead.name}</h1>
+              <p className="mt-2 text-sm text-muted-foreground">{lead.company ?? "Independent"} · {lead.lead_source ?? "Unknown source"}</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <StatusBadge status={lead.status} />
               <PriorityBadge priority={lead.priority} />
               <Button variant="outline" size="sm" onClick={() => setEditing((v) => !v)}>
-                {editing ? "Cancel" : "Edit"}
+                {!editing && <Pencil className="size-4" />}{editing ? "Cancel" : "Edit"}
               </Button>
               <Button
                 variant="ghost"
                 size="icon"
+                title="Delete lead"
+                aria-label="Delete lead"
                 onClick={() => {
                   if (confirm("Delete this lead and all its history?")) removeLead.mutate();
                 }}
@@ -230,9 +231,16 @@ function LeadDetail() {
               submitLabel="Save changes"
               pending={saveLead.isPending}
               onSubmit={(values) => saveLead.mutate(values)}
+              onCancel={() => setEditing(false)}
             />
           ) : (
-            <div className="flex flex-wrap items-end gap-3 border-t border-border pt-4">
+            <>
+            <div className="grid gap-5 border-t border-border pt-5 sm:grid-cols-3">
+              <div><p className="text-xs text-muted-foreground">Contact</p><p className="mt-1 break-all text-sm">{[lead.phone, lead.email].filter(Boolean).join(" · ") || "No contact details"}</p></div>
+              <div><p className="text-xs text-muted-foreground">Interest</p><p className="mt-1 text-sm">{lead.interest || "Not specified"}</p></div>
+              <div><p className="text-xs text-muted-foreground">Notes</p><p className="mt-1 whitespace-pre-wrap text-sm">{lead.notes || "No notes yet"}</p></div>
+            </div>
+            <div className="flex flex-wrap items-end gap-4 border-t border-border pt-5">
               <div className="space-y-1">
                 <Label className="text-xs">Status</Label>
                 <select
@@ -267,18 +275,19 @@ function LeadDetail() {
                 />
               </div>
             </div>
+            </>
           )}
         </CardContent>
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
+        <Card className="shadow-none">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Activity timeline</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-base"><Clock3 className="size-4 text-primary" /> Activity timeline</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2 rounded-lg border border-border p-3">
-              <div className="flex gap-2">
+            <div className="space-y-3 rounded-md border border-border bg-secondary/20 p-4">
+              <div className="flex flex-wrap gap-2">
                 <select
                   className={selectClass}
                   value={activityType}
@@ -290,7 +299,7 @@ function LeadDetail() {
                 </select>
                 <Input
                   type="date"
-                  className="h-9"
+                  className="h-9 w-auto min-w-0"
                   value={activityDate}
                   onChange={(e) => setActivityDate(e.target.value)}
                 />
@@ -311,10 +320,10 @@ function LeadDetail() {
             </div>
 
             {activitiesQuery.data?.length ? (
-              <ol className="space-y-3 border-l border-border pl-4">
+              <ol className="space-y-5 border-l border-border pl-5">
                 {activitiesQuery.data.map((a) => (
                   <li key={a.id} className="relative">
-                    <span className="absolute -left-[21px] top-1.5 size-2 rounded-full bg-primary" />
+                    <span className="absolute -left-[25px] top-1.5 size-2 rounded-full bg-primary" />
                     <p className="text-sm font-medium">
                       {a.activity_type} · {a.activity_date}
                     </p>
@@ -323,13 +332,13 @@ function LeadDetail() {
                 ))}
               </ol>
             ) : (
-              <p className="text-sm text-muted-foreground">No activity logged yet.</p>
+              <div className="flex flex-col items-center gap-2 py-8 text-center"><Clock3 className="size-6 text-primary" /><p className="text-sm font-medium">No activity yet</p><p className="text-xs text-muted-foreground">Log a call, message, or meeting above.</p></div>
             )}
           </CardContent>
         </Card>
 
         <div className="space-y-4">
-          <Card className="overflow-hidden border-primary/20">
+          <Card className="overflow-hidden border-primary/20 shadow-none">
             <CardHeader className="gap-3 border-b border-border/70 bg-primary/5 pb-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="space-y-1">
                 <CardTitle className="flex items-center gap-2 text-base">
@@ -495,9 +504,9 @@ function LeadDetail() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="shadow-none">
             <CardHeader className="flex-row items-center justify-between pb-3">
-              <CardTitle className="text-base">AI tasks</CardTitle>
+              <CardTitle className="flex items-center gap-2 text-base"><ListTodo className="size-4 text-primary" /> AI tasks</CardTitle>
               <Button
                 size="sm"
                 variant="outline"
@@ -511,7 +520,7 @@ function LeadDetail() {
             <CardContent className="space-y-3">
               {tasksQuery.data?.length ? (
                 tasksQuery.data.map((t) => (
-                  <div key={t.id} className="rounded-lg border border-border p-3 text-sm">
+                  <div key={t.id} className="rounded-md border border-border bg-secondary/20 p-4 text-sm">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="flex-1 font-medium">{t.task_title}</p>
                       <PriorityBadge priority={t.priority ?? "Medium"} />
@@ -535,14 +544,14 @@ function LeadDetail() {
                   </div>
                 ))
               ) : (
-                <p className="text-sm text-muted-foreground">No tasks yet.</p>
+                <div className="flex flex-col items-center gap-2 py-8 text-center"><ListTodo className="size-6 text-primary" /><p className="text-sm font-medium">No tasks yet</p><p className="text-xs text-muted-foreground">Suggest a next action for this lead.</p></div>
               )}
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="shadow-none">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">AI follow-up messages</CardTitle>
+              <CardTitle className="flex items-center gap-2 text-base"><Mail className="size-4 text-primary" /> AI follow-up messages</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex flex-wrap items-center gap-2">
@@ -577,7 +586,7 @@ function LeadDetail() {
 
               {messagesQuery.data?.length ? (
                 messagesQuery.data.map((m) => (
-                  <div key={m.id} className="rounded-lg border border-border p-3 text-sm">
+                  <div key={m.id} className="rounded-md border border-border bg-secondary/20 p-4 text-sm">
                     <p className="text-xs text-muted-foreground">
                       {m.message_type} · {m.tone}
                     </p>
@@ -596,7 +605,7 @@ function LeadDetail() {
                   </div>
                 ))
               ) : (
-                <p className="text-sm text-muted-foreground">No messages generated yet.</p>
+                <div className="flex flex-col items-center gap-2 py-8 text-center"><FileText className="size-6 text-primary" /><p className="text-sm font-medium">No messages yet</p><p className="text-xs text-muted-foreground">Choose a format and generate a follow-up draft.</p></div>
               )}
             </CardContent>
           </Card>
