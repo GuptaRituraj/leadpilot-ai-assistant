@@ -1,132 +1,29 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { Search } from "lucide-react";
-import { fetchLeads, LEAD_STATUSES, PRIORITIES, LEAD_SOURCES } from "@/lib/crm";
+import { Search, Plus, CalendarClock, ArrowUpRight, UsersRound, AlertTriangle } from "lucide-react";
+import { fetchLeads, LEAD_STATUSES, PRIORITIES, LEAD_SOURCES, today } from "@/lib/crm";
 import { StatusBadge, PriorityBadge } from "@/components/LeadBadges";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 
-export const Route = createFileRoute("/leads/")({
-  head: () => ({
-    meta: [
-      { title: "Leads | LeadPilot AI" },
-      { name: "description", content: "Search, filter and manage every lead in your pipeline." },
-      { property: "og:title", content: "Leads | LeadPilot AI" },
-      {
-        property: "og:description",
-        content: "Search, filter and manage every lead in your pipeline.",
-      },
-    ],
-  }),
-  component: LeadsPage,
-});
-
-const selectClass =
-  "h-10 rounded-md border border-input bg-card px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring";
-
+export const Route = createFileRoute("/leads/")({ head: () => ({ meta: [
+  { title: "Pipeline | LeadPilot AI" }, { name: "description", content: "Search, filter and manage every lead in your pipeline." },
+  { property: "og:title", content: "Pipeline | LeadPilot AI" }, { property: "og:description", content: "Search, filter and manage every lead in your pipeline." },
+  { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary_large_image" },
+] }), component: LeadsPage });
+const selectClass = "h-10 min-w-0 rounded-md border border-input bg-card px-3 text-sm text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring";
 function LeadsPage() {
-  const { data: leads = [], isLoading } = useQuery({ queryKey: ["leads"], queryFn: fetchLeads });
-  const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("");
-  const [priority, setPriority] = useState("");
-  const [source, setSource] = useState("");
-
-  const term = search.trim().toLowerCase();
-  const filtered = leads.filter((l) => {
-    const haystack = [l.name, l.company, l.email, l.phone, l.interest, l.notes]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
-    return (
-      (!term || haystack.includes(term)) &&
-      (!status || l.status === status) &&
-      (!priority || l.priority === priority) &&
-      (!source || l.lead_source === source)
-    );
-  });
-
-  return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Leads</h1>
-          <p className="text-sm text-muted-foreground">{filtered.length} of {leads.length} leads</p>
-        </div>
-        <Link
-          to="/leads/new"
-          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
-        >
-          Add lead
-        </Link>
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        <div className="relative min-w-[220px] flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search name, company, interest…"
-            className="pl-9"
-          />
-        </div>
-        <select className={selectClass} value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="">All statuses</option>
-          {LEAD_STATUSES.map((s) => (
-            <option key={s}>{s}</option>
-          ))}
-        </select>
-        <select
-          className={selectClass}
-          value={priority}
-          onChange={(e) => setPriority(e.target.value)}
-        >
-          <option value="">All priorities</option>
-          {PRIORITIES.map((p) => (
-            <option key={p}>{p}</option>
-          ))}
-        </select>
-        <select className={selectClass} value={source} onChange={(e) => setSource(e.target.value)}>
-          <option value="">All sources</option>
-          {LEAD_SOURCES.map((s) => (
-            <option key={s}>{s}</option>
-          ))}
-        </select>
-      </div>
-
-      {isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
-      ) : filtered.length === 0 ? (
-        <Card>
-          <CardContent className="p-8 text-center text-sm text-muted-foreground">
-            No leads match your filters.
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-2">
-          {filtered.map((lead) => (
-            <Link
-              key={lead.id}
-              to="/leads/$leadId"
-              params={{ leadId: lead.id }}
-              className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-4 transition-colors hover:bg-accent/40"
-            >
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-medium">{lead.name}</p>
-                <p className="truncate text-xs text-muted-foreground">
-                  {lead.company ?? "No company"} · {lead.lead_source ?? "Unknown source"}
-                </p>
-              </div>
-              <div className="text-xs text-muted-foreground">
-                {lead.follow_up_date ? `Follow up ${lead.follow_up_date}` : "No follow-up set"}
-              </div>
-              <StatusBadge status={lead.status} />
-              <PriorityBadge priority={lead.priority} />
-            </Link>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+  const { data: leads = [], isLoading, isError, refetch } = useQuery({ queryKey: ["leads"], queryFn: fetchLeads });
+  const [search, setSearch] = useState(""); const [status, setStatus] = useState(""); const [priority, setPriority] = useState(""); const [source, setSource] = useState(""); const [followUp, setFollowUp] = useState(""); const [sort, setSort] = useState("recent");
+  const term = search.trim().toLowerCase(); const day = today();
+  const filtered = leads.filter(l => {
+    const haystack = [l.name,l.company,l.email,l.phone,l.interest,l.notes,l.lead_source].filter(Boolean).join(" ").toLowerCase();
+    return (!term || haystack.includes(term)) && (!status || l.status === status) && (!priority || l.priority === priority) && (!source || l.lead_source === source) && (!followUp || (followUp === "overdue" ? !!l.follow_up_date && l.follow_up_date < day && !["Won","Lost"].includes(l.status) : followUp === "today" ? l.follow_up_date === day : !!l.follow_up_date && l.follow_up_date > day));
+  }).sort((a,b) => sort === "followup" ? (a.follow_up_date || "9999").localeCompare(b.follow_up_date || "9999") : sort === "priority" ? ["High","Medium","Low"].indexOf(a.priority) - ["High","Medium","Low"].indexOf(b.priority) : b.created_at.localeCompare(a.created_at));
+  return <div className="space-y-7"><div className="flex flex-wrap items-end justify-between gap-4"><div><p className="mb-2 text-xs font-semibold uppercase text-primary">Workspace</p><h1 className="text-3xl font-semibold">Pipeline</h1><p className="mt-2 text-sm text-muted-foreground">{filtered.length} of {leads.length} leads</p></div><Button asChild><Link to="/leads/new"><Plus /> Add lead</Link></Button></div>
+    <div className="space-y-3 border-y border-border py-5"><div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search leads, companies, interests, notes…" className="h-10 bg-card pl-10" aria-label="Search leads" /></div><div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap"><select aria-label="Filter status" className={selectClass} value={status} onChange={e => setStatus(e.target.value)}><option value="">All statuses</option>{LEAD_STATUSES.map(s => <option key={s}>{s}</option>)}</select><select aria-label="Filter source" className={selectClass} value={source} onChange={e => setSource(e.target.value)}><option value="">All sources</option>{LEAD_SOURCES.map(s => <option key={s}>{s}</option>)}</select><select aria-label="Filter priority" className={selectClass} value={priority} onChange={e => setPriority(e.target.value)}><option value="">All priorities</option>{PRIORITIES.map(p => <option key={p}>{p}</option>)}</select><select aria-label="Filter follow-up" className={selectClass} value={followUp} onChange={e => setFollowUp(e.target.value)}><option value="">Any follow-up</option><option value="overdue">Overdue</option><option value="today">Due today</option><option value="upcoming">Upcoming</option></select><select aria-label="Sort leads" className={selectClass} value={sort} onChange={e => setSort(e.target.value)}><option value="recent">Newest first</option><option value="followup">Follow-up date</option><option value="priority">Priority first</option></select></div></div>
+    {isLoading ? <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{[1,2,3,4,5,6].map(i => <Skeleton key={i} className="h-48" />)}</div> : isError ? <div className="flex flex-col items-center gap-3 py-16 text-center"><AlertTriangle className="size-8 text-destructive" /><p>Could not load your pipeline.</p><Button variant="outline" onClick={() => refetch()}>Try again</Button></div> : filtered.length === 0 ? <div className="flex flex-col items-center gap-3 rounded-md border border-dashed border-border py-16 text-center"><UsersRound className="size-8 text-primary" /><h2 className="font-semibold">{leads.length ? "No matching leads" : "No leads yet"}</h2><p className="text-sm text-muted-foreground">{leads.length ? "Try changing your search or filters." : "Add your first lead to start your pipeline."}</p>{leads.length ? <Button variant="outline" onClick={() => {setSearch("");setStatus("");setSource("");setPriority("");setFollowUp("");}}>Clear filters</Button> : <Button asChild><Link to="/leads/new"><Plus /> Add lead</Link></Button>}</div> : <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{filtered.map(lead => { const overdue = !!lead.follow_up_date && lead.follow_up_date < day && !["Won","Lost"].includes(lead.status); return <Link key={lead.id} to="/leads/$leadId" params={{leadId:lead.id}} className={`group flex min-h-48 flex-col rounded-md border bg-card p-5 transition-colors hover:border-primary/50 hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${overdue ? "border-destructive/50" : "border-border"}`}><div className="flex items-start justify-between gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-md bg-secondary text-xs font-semibold text-primary">{lead.name.slice(0,2).toUpperCase()}</span><ArrowUpRight className="size-4 text-muted-foreground transition-colors group-hover:text-primary" /></div><p className="mt-3 truncate text-sm font-semibold">{lead.name}</p><p className="truncate text-xs text-muted-foreground">{lead.company || "Independent"} · {lead.lead_source || "Unknown source"}</p><div className="mt-auto flex flex-wrap items-center gap-2 pt-5"><StatusBadge status={lead.status} /><PriorityBadge priority={lead.priority} /></div><div className={`mt-3 flex items-center gap-1.5 border-t border-border pt-3 text-xs ${overdue ? "text-destructive" : "text-muted-foreground"}`}><CalendarClock className="size-3.5" />{lead.follow_up_date ? `${overdue ? "Overdue · " : "Follow up · "}${lead.follow_up_date}` : "No follow-up set"}</div></Link>; })}</div>}
+  </div>;
 }
