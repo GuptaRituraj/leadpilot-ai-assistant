@@ -504,9 +504,9 @@ function LeadDetail() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="shadow-none">
             <CardHeader className="flex-row items-center justify-between pb-3">
-              <CardTitle className="text-base">AI tasks</CardTitle>
+              <CardTitle className="flex items-center gap-2 text-base"><ListTodo className="size-4 text-primary" /> AI tasks</CardTitle>
               <Button
                 size="sm"
                 variant="outline"
@@ -520,7 +520,7 @@ function LeadDetail() {
             <CardContent className="space-y-3">
               {tasksQuery.data?.length ? (
                 tasksQuery.data.map((t) => (
-                  <div key={t.id} className="rounded-lg border border-border p-3 text-sm">
+                  <div key={t.id} className="rounded-md border border-border bg-secondary/20 p-4 text-sm">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="flex-1 font-medium">{t.task_title}</p>
                       <PriorityBadge priority={t.priority ?? "Medium"} />
@@ -544,14 +544,14 @@ function LeadDetail() {
                   </div>
                 ))
               ) : (
-                <p className="text-sm text-muted-foreground">No tasks yet.</p>
+                <div className="flex flex-col items-center gap-2 py-8 text-center"><ListTodo className="size-6 text-primary" /><p className="text-sm font-medium">No tasks yet</p><p className="text-xs text-muted-foreground">Suggest a next action for this lead.</p></div>
               )}
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="shadow-none">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">AI follow-up messages</CardTitle>
+              <CardTitle className="flex items-center gap-2 text-base"><Mail className="size-4 text-primary" /> AI follow-up messages</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex flex-wrap items-center gap-2">
@@ -586,7 +586,7 @@ function LeadDetail() {
 
               {messagesQuery.data?.length ? (
                 messagesQuery.data.map((m) => (
-                  <div key={m.id} className="rounded-lg border border-border p-3 text-sm">
+                  <div key={m.id} className="rounded-md border border-border bg-secondary/20 p-4 text-sm">
                     <p className="text-xs text-muted-foreground">
                       {m.message_type} · {m.tone}
                     </p>
@@ -605,7 +605,7 @@ function LeadDetail() {
                   </div>
                 ))
               ) : (
-                <p className="text-sm text-muted-foreground">No messages generated yet.</p>
+                <div className="flex flex-col items-center gap-2 py-8 text-center"><FileText className="size-6 text-primary" /><p className="text-sm font-medium">No messages yet</p><p className="text-xs text-muted-foreground">Choose a format and generate a follow-up draft.</p></div>
               )}
             </CardContent>
           </Card>
