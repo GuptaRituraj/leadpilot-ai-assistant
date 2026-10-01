@@ -6,6 +6,7 @@ import { StatusBadge, PriorityBadge } from "@/components/LeadBadges";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { AiTaskGenerator } from "@/components/AiTaskGenerator";
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [
@@ -43,6 +44,7 @@ function Dashboard() {
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
       <Stat label="Total leads" value={leads.length} icon={UsersRound} accent /><Stat label="New leads" value={fresh.length} icon={Sparkles} /><Stat label="Overdue follow-ups" value={overdue.length} icon={AlertTriangle} /><Stat label="Due today" value={dueToday.length} icon={CalendarClock} /><Stat label="Active opportunities" value={active.length} icon={TrendingUp} />
     </div>
+    {!isLoading && !isError && <AiTaskGenerator leadCount={leads.length} />}
     {isLoading ? <div className="grid gap-4 lg:grid-cols-2"><Skeleton className="h-72" /><Skeleton className="h-72" /></div> : isError ? <Card><CardContent className="flex flex-col items-center gap-4 py-12 text-center"><AlertTriangle className="size-8 text-destructive" /><p>Could not load your leads.</p><Button variant="outline" onClick={() => refetch()}>Try again</Button></CardContent></Card> : leads.length === 0 ? <div className="flex flex-col items-center gap-3 rounded-md border border-dashed border-border py-16 text-center"><UsersRound className="size-8 text-primary" /><h2 className="font-semibold">Your pipeline starts here</h2><p className="text-sm text-muted-foreground">Add a lead to start tracking conversations and follow-ups.</p><Button asChild><Link to="/leads/new"><Plus /> Add your first lead</Link></Button></div> : <>
       <div className="grid gap-5 xl:grid-cols-[1.5fr_1fr]">
         <Card className="shadow-none"><CardHeader className="border-b border-border p-5"><div className="flex items-center gap-2"><span className="grid size-8 place-items-center rounded-md bg-primary/10 text-primary"><Clock3 className="size-4" /></span><div><CardTitle className="text-base">What should I do today?</CardTitle><p className="mt-1 text-xs text-muted-foreground">Follow-ups that need your attention</p></div></div></CardHeader><CardContent className="px-5 py-2">{[...dueToday, ...overdue].length ? [...dueToday, ...overdue].map((l) => <LeadRow key={l.id} lead={l} />) : <div className="flex flex-col items-center gap-2 py-12 text-center"><CircleCheck className="size-7 text-primary" /><p className="text-sm font-medium">All caught up</p><p className="text-xs text-muted-foreground">No follow-ups due today or overdue.</p></div>}</CardContent></Card>
