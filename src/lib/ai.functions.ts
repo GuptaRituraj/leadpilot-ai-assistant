@@ -211,3 +211,106 @@ export const askCrm = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     return saved;
   });
+
+const CLOSED = ["Won", "Lost"];
+const STUCK_DAYS = 14;
+
+function addDays(day: string, n: number) {
+  const d = new Date(`${day}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+function daysBetween(a: string, b: string) {
+  return Math.floor((new Date(b).getTime() - new Date(a).getTime()) / 86400000);
+}
+
+export const generateDailyTasks = createServerFn({ method: "POST" }).handler(async () => {
+  const { generateJson, objectSchema } = await import("./ai.server");
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const day = new Date().toISOString().slice(0, 10);
+
+  const [leadsRes, actsRes, sumRes, msgRes, openRes] = await Promise.all([
+    supabaseAdmin.from("leads").select("*"),
+    supabaseAdmin.from("lead_activities").select("lead_id, activity_type, activity_note, activity_date, created_at").order("activity_date", { ascending: false }),
+    supabaseAdmin.from("ai_summaries").select("lead_id, lead_summary, suggested_next_step"),
+    supabaseAdmin.from("ai_messages").select("lead_id, created_at").order("created_at", { ascending: false }),
+    supabaseAdmin.from("ai_tasks").select("id, lead_id").eq("status", "Open"),
+  ]);
+  for (const r of [leadsRes, actsRes, sumRes, msgRes, openRes]) if (r.error) throw new Error(r.error.message);
+  const leads = leadsRes.data ?? [];
+  if (!leads.length) return { leadCount: 0, created: 0, updated: 0 };
+
+  type Candidate = { lead: (typeof leads)[number]; reasons: string[]; missing: string[]; priority: "Low" | "Medium" | "High"; due: string; facts: string };
+  const candidates: Candidate[] = [];
+
+  for (const lead of leads) {
+    if (CLOSED.includes(lead.status)) continue;
+    const acts = (actsRes.data ?? []).filter((a) => a.lead_id === lead.id);
+    const lastAct = acts[0]?.activity_date ?? null;
+    const lastMsg = (msgRes.data ?? []).find((m) => m.lead_id === lead.id)?.created_at?.slice(0, 10) ?? null;
+    const summary = (sumRes.data ?? []).find((s) => s.lead_id === lead.id);
+    const reasons: string[] = [];
+    const missing: string[] = [];
+    let due = addDays(day, 3);
+    let priority: Candidate["priority"] = (lead.priority as Candidate["priority"]) || "Medium";
+
+    if (lead.follow_up_date === day) { reasons.push("Follow-up date is today"); due = day; }
+    if (lead.follow_up_date && lead.follow_up_date < day) {
+      reasons.push(`Follow-up is overdue by ${daysBetween(lead.follow_up_date, day)} day(s) (was ${lead.follow_up_date})`);
+      due = day; priority = "High";
+    }
+    if (lead.priority === "High" && !reasons.length) { reasons.push("High-priority lead with no follow-up due yet"); due = addDays(day, 1); }
+    const lastTouch = [lastAct, lead.updated_at?.slice(0, 10)].filter(Boolean).sort().pop() as string | undefined;
+    if (lastTouch && daysBetween(lastTouch, day) >= STUCK_DAYS) {
+      reasons.push(`No recorded activity or update for ${daysBetween(lastTouch, day)} days while in status "${lead.status}"`);
+    }
+    if (!lead.phone && !lead.email) missing.push("contact details (phone and email)");
+    if (!lead.interest) missing.push("interest/requirement");
+    if (!lead.follow_up_date) missing.push("follow-up date");
+    if (!lead.notes && !acts.length) missing.push("notes or activity history");
+    if (missing.length) reasons.push(`Missing information: ${missing.join(", ")}`);
+    const needsMessage = (lead.follow_up_date && lead.follow_up_date <= day) && (!lastMsg || lastMsg < (lead.follow_up_date ?? day));
+    if (needsMessage) reasons.push("No follow-up message drafted since the follow-up became due");
+    if (!reasons.length) continue;
+
+    const facts = [
+      `lead_id: ${lead.id}`, `name: ${lead.name}`, `company: ${lead.company ?? "not available"}`,
+      `status: ${lead.status}`, `priority: ${lead.priority}`, `source: ${lead.lead_source ?? "not available"}`,
+      `interest: ${lead.interest ?? "not available"}`, `follow_up_date: ${lead.follow_up_date ?? "not set"}`,
+      `phone: ${lead.phone ? "present" : "missing"}`, `email: ${lead.email ? "present" : "missing"}`,
+      `notes: ${lead.notes ?? "none"}`, `registered: ${lead.created_at.slice(0, 10)}`,
+      `last activity: ${lastAct ?? "none recorded"}`, `last drafted message: ${lastMsg ?? "none"}`,
+      `recent activities: ${acts.slice(0, 3).map((a) => `${a.activity_date} ${a.activity_type}: ${a.activity_note ?? ""}`).join(" | ") || "none"}`,
+      `saved AI summary next step: ${summary?.suggested_next_step ?? "none"}`,
+      `detected reasons: ${reasons.join("; ")}`,
+    ].join("\n");
+    candidates.push({ lead, reasons, missing, priority, due, facts });
+  }
+
+  if (!candidates.length) return { leadCount: leads.length, created: 0, updated: 0 };
+  candidates.sort((a, b) => (a.due < b.due ? -1 : a.due > b.due ? 1 : 0));
+  const batch = candidates.slice(0, 15);
+
+  const result = await generateJson<{ tasks: Array<{ lead_id: string; task_title: string; task_reason: string; recommended_action: string }> }>(
+    `You are a sales assistant. Today is ${day}. For EACH lead block, write one task. Use only the facts given; never invent conversations, intent, budgets or dates. task_title: short imperative (max 8 words). task_reason: 1-2 sentences citing the detected reasons and facts; if information is missing, name the missing fields explicitly. recommended_action: one concrete action (e.g. call, send WhatsApp follow-up, ask for missing email). Return lead_id exactly as given.`,
+    batch.map((c) => c.facts).join("\n\n---\n\n"),
+    "daily_tasks",
+    objectSchema({
+      tasks: { type: "array", items: objectSchema({ lead_id: { type: "string" }, task_title: { type: "string" }, task_reason: { type: "string" }, recommended_action: { type: "string" } }) },
+    }),
+  );
+
+  let created = 0, updated = 0;
+  for (const c of batch) {
+    const t = result.tasks.find((x) => x.lead_id === c.lead.id);
+    if (!t) continue;
+    const values = { lead_id: c.lead.id, task_title: t.task_title, task_reason: t.task_reason, recommended_action: t.recommended_action, priority: c.priority, due_date: c.due, status: "Open", updated_at: new Date().toISOString() };
+    const existing = (openRes.data ?? []).find((o) => o.lead_id === c.lead.id);
+    const { error } = existing
+      ? await supabaseAdmin.from("ai_tasks").update(values).eq("id", existing.id)
+      : await supabaseAdmin.from("ai_tasks").insert(values);
+    if (error) throw new Error(error.message);
+    if (existing) updated++; else created++;
+  }
+  return { leadCount: leads.length, created, updated };
+});
